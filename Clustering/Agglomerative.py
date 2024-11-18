@@ -7,6 +7,7 @@ from sklearn.cluster import AgglomerativeClustering
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 from scipy.spatial.distance import pdist, cdist
+from scipy.cluster.hierarchy import dendrogram, linkage
 import tkinter as tk
 from tkinter import simpledialog
 
@@ -14,16 +15,6 @@ def dunn_index(X, labels):
     """
     Calculate the Dunn Index, which is the ratio of the minimum inter-cluster distance
     to the maximum intra-cluster distance.
-
-    Parameters:
-    X : array-like, shape (n_samples, n_features)
-        The input data.
-    labels : array-like, shape (n_samples,)
-        Cluster labels.
-
-    Returns:
-    float
-        The Dunn Index score.
     """
     unique_clusters = np.unique(labels)
     if len(unique_clusters) < 2:
@@ -51,16 +42,7 @@ def dunn_index(X, labels):
 def perform_agglomerative_clustering(df, n_clusters):
     """
     Perform Agglomerative Clustering with different linkage methods and visualize
-    the results with scatter plots and heatmaps.
-
-    Parameters:
-    df : DataFrame
-        The input dataset with features for clustering.
-    n_clusters : int
-        The number of clusters for the clustering algorithm.
-
-    Returns:
-    None
+    the results with scatter plots, heatmaps, and dendrograms.
     """
     features = ['Gender', 'Customer Type', 'Age', 'Type of Travel', 'Class', 'Flight Distance',
                 'Inflight wifi service', 'Departure/Arrival time convenient', 'Ease of Online booking',
@@ -84,6 +66,7 @@ def perform_agglomerative_clustering(df, n_clusters):
     ax_idx = 0
 
     for linkage_method in linkage_methods:
+        # Agglomerative clustering
         agglo = AgglomerativeClustering(n_clusters=n_clusters, linkage=linkage_method)
         agglo_clusters = agglo.fit_predict(pca_components)
 
@@ -127,14 +110,19 @@ def perform_agglomerative_clustering(df, n_clusters):
 
     plt.tight_layout(rect=[0.043, 0.082, 0.92, 0.86])  # Adjusted layout
     plt.subplots_adjust(hspace=0.825, wspace=0.171)  # Adjusted subplot spacing
+
+    # Plot dendrogram separately for better visualization
+    linkage_matrix = linkage(pca_components, method='ward')
+    plt.figure(figsize=(10, 7))
+    dendrogram(linkage_matrix)
+    plt.title(f'Dendrogram (Ward linkage, n_clusters={n_clusters})', fontsize=16)
+    plt.xlabel('Sample Index', fontsize=12)
+    plt.ylabel('Distance', fontsize=12)
     plt.show()
 
 def main():
     """
     Main function to load data, display a UI for selecting the number of clusters, and plot clustering comparisons.
-
-    Returns:
-    None
     """
     root = tk.Tk()
     root.withdraw()  # Hide the root window
