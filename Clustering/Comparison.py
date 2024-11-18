@@ -2,135 +2,155 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-from sklearn.cluster import DBSCAN, KMeans
+from sklearn.cluster import KMeans, AgglomerativeClustering
 from sklearn.metrics import silhouette_score
-from scipy.spatial import distance_matrix
+import tkinter as tk
+from tkinter import simpledialog
 import numpy as np
-from itertools import product
+from scipy.spatial.distance import pdist, cdist
 
-# Load the dataset
-df = pd.read_csv('C:/Users/BossJore/PycharmProjects/Airline_Passenger_Satisfaction/data/Normalized_Data2.csv')
+def dunn_index(X, labels):
+    """
+    Calculate the Dunn Index, which is the ratio of the minimum inter-cluster distance
+    to the maximum intra-cluster distance.
 
-# Features used for clustering
-features = ['Gender', 'Customer Type', 'Age', 'Type of Travel', 'Class', 'Flight Distance',
-            'Departure Delay in Minutes', 'Arrival Delay in Minutes', 'Satisfaction Score']
+    Parameters:
+    X : array-like, shape (n_samples, n_features)
+        The input data.
+    labels : array-like, shape (n_samples,)
+        Cluster labels.
 
-# Standardize the data
-scaler = StandardScaler()
-df[features] = scaler.fit_transform(df[features])
-
-# Apply PCA for dimensionality reduction (to 2 components for visualization)
-pca = PCA(n_components=2)
-pca_components = pca.fit_transform(df[features])
-
-
-# --- DBSCAN Clustering with Hyperparameter Tuning ---
-def dbscan_tuning(pca_components):
-    best_score = -1
-    best_eps = None
-    best_min_samples = None
-    best_clusters = None
-
-    for eps, min_samples in product(np.linspace(0.1, 0.8, 5), range(3, 8)):
-        dbscan = DBSCAN(eps=eps, min_samples=min_samples)
-        clusters = dbscan.fit_predict(pca_components)
-
-        # Skip if clustering has noise or only one cluster
-        if len(set(clusters)) > 1 and -1 not in set(clusters):
-            try:
-                score = silhouette_score(pca_components, clusters)
-                if score > best_score:
-                    best_score = score
-                    best_eps = eps
-                    best_min_samples = min_samples
-                    best_clusters = clusters
-            except ValueError:
-                continue
-
-    return best_eps, best_min_samples, best_clusters, best_score
-
-
-# Find optimal DBSCAN parameters
-best_eps, best_min_samples, dbscan_clusters, dbscan_score = dbscan_tuning(pca_components)
-if dbscan_clusters is not None:
-    print(f"Best DBSCAN - eps: {best_eps:.3f}, min_samples: {best_min_samples}, Silhouette Score: {dbscan_score:.3f}")
-else:
-    print("DBSCAN did not find valid clusters.")
-
-
-# --- K-Means Clustering ---
-def kmeans_tuning(pca_components):
-    best_score = -1
-    best_k = None
-    best_clusters = None
-
-    for k in range(2, 11):
-        kmeans = KMeans(n_clusters=k, random_state=42)
-        clusters = kmeans.fit_predict(pca_components)
-        score = silhouette_score(pca_components, clusters)
-        if score > best_score:
-            best_score = score
-            best_k = k
-            best_clusters = clusters
-
-    return best_k, best_clusters, best_score
-
-
-# Find optimal K-Means parameters
-best_k, kmeans_clusters, kmeans_score = kmeans_tuning(pca_components)
-print(f"Best K-Means - n_clusters: {best_k}, Silhouette Score: {kmeans_score:.3f}")
-
-
-# --- Dunn Index Calculation ---
-def dunn_index(points, labels):
-    unique_labels = set(labels)
-    if len(unique_labels) < 2 or -1 in unique_labels:
+    Returns:
+    float
+        The Dunn Index score.
+    """
+    unique_clusters = np.unique(labels)
+    if len(unique_clusters) < 2:
         return np.nan
+    intra_cluster_distances = []
+    for cluster in unique_clusters:
+        cluster_points = X[labels == cluster]
+        if len(cluster_points) > 1:
+            distances = pdist(cluster_points)
+            intra_cluster_distances.append(np.max(distances))
+        else:
+            intra_cluster_distances.append(0)
+    max_intra_distance = max(intra_cluster_distances)
+    inter_cluster_distances = []
+    for i, cluster1 in enumerate(unique_clusters[:-1]):
+        for cluster2 in unique_clusters[i + 1:]:
+            cluster1_points = X[labels == cluster1]
+            cluster2_points = X[labels == cluster2]
+            distances = cdist(cluster1_points, cluster2_points)
+            inter_cluster_distances.append(np.min(distances))
+    min_inter_distance = min(inter_cluster_distances)
+    dunn = min_inter_distance / max_intra_distance if max_intra_distance > 0 else np.nan
+    return dunn
 
-    inter_distances = []
-    intra_distances = []
+def davies_bouldin_index(X, labels):
+    """
+    Calculate the Davies-Bouldin Index, a measure of clustering quality that evaluates
+    the average similarity ratio of each cluster with the one most similar to it.
 
-    for label in unique_labels:
-        cluster_points = points[labels == label]
-        intra_distances.append(np.max(distance_matrix(cluster_points, cluster_points)))
+    Parameters:
+    X : array-like, shape (n_samples, n_features)
+        The input data.
+    labels : array-like, shape (n_samples,)
+        Cluster labels.
 
-        for other_label in unique_labels:
-            if label != other_label:
-                other_points = points[labels == other_label]
-                inter_distances.append(np.min(distance_matrix(cluster_points, other_points)))
+    Returns:
+    float
+        The Davies-Bouldin Index score.
+    """
+    unique_clusters = np.unique(labels)
+    n_clusters = len(unique_clusters)
+    if n_clusters < 2:
+        return np.nan
+    distances = cdist(X, X)
+    cluster_centers = [np.mean(X[labels == cluster], axis=0) for cluster in unique_clusters]
+    db_index = 0
+    for i in range(n_clusters):
+        max_ratio = -np.inf
+        for j in range(n_clusters):
+            if i != j:
+                si = np.mean(distances[labels == unique_clusters[i], :][:, labels == unique_clusters[i]])
+                sj = np.mean(distances[labels == unique_clusters[j], :][:, labels == unique_clusters[j]])
+                dij = np.linalg.norm(cluster_centers[i] - cluster_centers[j])
+                ratio = (si + sj) / dij
+                max_ratio = max(max_ratio, ratio)
+        db_index += max_ratio
+    return db_index / n_clusters
 
-    min_inter = np.min(inter_distances)
-    max_intra = np.max(intra_distances)
+def plot_comparison(df, n_clusters):
+    """
+    Perform K-Means and Agglomerative Clustering, plot results side-by-side, and display silhouette, Dunn, and Davies-Bouldin scores.
 
-    return min_inter / max_intra if max_intra != 0 else np.nan
+    Parameters:
+    df : DataFrame
+        The input dataset with features for clustering.
+    n_clusters : int
+        The number of clusters for the clustering algorithms.
 
+    Returns:
+    None
+    """
+    features = ['Gender', 'Customer Type', 'Age', 'Type of Travel', 'Class', 'Flight Distance',
+                'Inflight wifi service', 'Departure/Arrival time convenient', 'Ease of Online booking',
+                'Gate location', 'Food and drink', 'Online boarding', 'Seat comfort', 'Inflight entertainment',
+                'On-board service', 'Leg room service', 'Baggage handling', 'Checkin service',
+                'Inflight service', 'Cleanliness', 'Departure Delay in Minutes', 'Arrival Delay in Minutes',
+                'Satisfaction Score']
 
-# Compute Dunn Index for DBSCAN if valid
-if dbscan_clusters is not None:
-    dbscan_dunn = dunn_index(pca_components, dbscan_clusters)
-    print(f"DBSCAN Dunn Index: {dbscan_dunn:.3f}")
+    scaler = StandardScaler()
+    df[features] = scaler.fit_transform(df[features])
 
-# Compute Dunn Index for K-Means
-kmeans_dunn = dunn_index(pca_components, kmeans_clusters)
-print(f"K-Means Dunn Index: {kmeans_dunn:.3f}")
+    pca = PCA(n_components=2)
+    pca_components = pca.fit_transform(df[features])
 
-# --- Visualization ---
-plt.figure(figsize=(14, 6))
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    kmeans_clusters = kmeans.fit_predict(pca_components)
+    kmeans_score = silhouette_score(pca_components, kmeans_clusters)
+    kmeans_dunn = dunn_index(pca_components, kmeans_clusters)
+    kmeans_davies_bouldin = davies_bouldin_index(pca_components, kmeans_clusters)
 
-if dbscan_clusters is not None:
-    plt.subplot(1, 2, 1)
-    plt.scatter(pca_components[:, 0], pca_components[:, 1], c=dbscan_clusters, cmap='viridis', marker='o')
-    plt.title('DBSCAN Clustering')
-    plt.colorbar(label='Cluster')
-    plt.xlabel('PCA Component 1')
-    plt.ylabel('PCA Component 2')
+    agglomerative = AgglomerativeClustering(n_clusters=n_clusters, linkage='ward')
+    agglomerative_clusters = agglomerative.fit_predict(pca_components)
+    agglomerative_score = silhouette_score(pca_components, agglomerative_clusters)
+    agglomerative_dunn = dunn_index(pca_components, agglomerative_clusters)
+    agglomerative_davies_bouldin = davies_bouldin_index(pca_components, agglomerative_clusters)
 
-plt.subplot(1, 2, 2)
-plt.scatter(pca_components[:, 0], pca_components[:, 1], c=kmeans_clusters, cmap='viridis', marker='o')
-plt.title('K-Means Clustering')
-plt.colorbar(label='Cluster')
-plt.xlabel('PCA Component 1')
-plt.ylabel('PCA Component 2')
+    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
 
-plt.tight_layout()
-plt.show()
+    axes[0].scatter(pca_components[:, 0], pca_components[:, 1], c=kmeans_clusters, cmap='viridis', marker='o')
+    axes[0].set_title(f'K-Means Clustering (n_clusters={n_clusters})\nSilhouette: {kmeans_score:.3f}, Dunn: {kmeans_dunn:.3f}, DB: {kmeans_davies_bouldin:.3f}', fontsize=14)
+    axes[0].set_xlabel('PCA Component 1', fontsize=12)
+    axes[0].set_ylabel('PCA Component 2', fontsize=12)
+
+    axes[1].scatter(pca_components[:, 0], pca_components[:, 1], c=agglomerative_clusters, cmap='viridis', marker='o')
+    axes[1].set_title(f'Agglomerative Clustering (n_clusters={n_clusters})\nSilhouette: {agglomerative_score:.3f}, Dunn: {agglomerative_dunn:.3f}, DB: {agglomerative_davies_bouldin:.3f}', fontsize=14)
+    axes[1].set_xlabel('PCA Component 1', fontsize=12)
+    axes[1].set_ylabel('PCA Component 2', fontsize=12)
+
+    plt.tight_layout()
+    plt.show()
+
+def main():
+    """
+    Main function to load data, display a UI for selecting the number of clusters, and plot clustering comparisons.
+
+    Returns:
+    None
+    """
+    df = pd.read_csv('C:/Users/BossJore/PycharmProjects/Airline_Passenger_Satisfaction/data/Normalized_Data2.csv')
+
+    root = tk.Tk()
+    root.withdraw()  # Hides the main tkinter window
+
+    n_clusters = simpledialog.askinteger("Input", "Enter the number of clusters:", minvalue=2)
+    if n_clusters:
+        plot_comparison(df, n_clusters)
+    else:
+        print("No valid input provided.")
+
+if __name__ == "__main__":
+    main()
