@@ -1,6 +1,5 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans, AgglomerativeClustering
 from sklearn.metrics import silhouette_score
@@ -100,9 +99,6 @@ def plot_comparison(df, n_clusters):
                 'On-board service', 'Leg room service', 'Baggage handling', 'Checkin service',
                 'Inflight service', 'Cleanliness', 'Departure Delay in Minutes', 'Arrival Delay in Minutes',
                 'Satisfaction Score']
-
-    scaler = StandardScaler()
-    df[features] = scaler.fit_transform(df[features])
 
     pca = PCA(n_components=2)
     pca_components = pca.fit_transform(df[features])

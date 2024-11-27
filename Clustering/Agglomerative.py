@@ -4,7 +4,6 @@ import seaborn as sns
 from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score, davies_bouldin_score
 from sklearn.cluster import AgglomerativeClustering
-from sklearn.preprocessing import StandardScaler
 import numpy as np
 from scipy.spatial.distance import pdist, cdist
 from scipy.cluster.hierarchy import dendrogram, linkage
@@ -50,9 +49,6 @@ def perform_agglomerative_clustering(df, n_clusters):
                 'On-board service', 'Leg room service', 'Baggage handling', 'Checkin service',
                 'Inflight service', 'Cleanliness', 'Departure Delay in Minutes', 'Arrival Delay in Minutes',
                 'Satisfaction Score']
-
-    scaler = StandardScaler()
-    df[features] = scaler.fit_transform(df[features])
 
     pca = PCA(n_components=2)
     pca_components = pca.fit_transform(df[features])
@@ -131,7 +127,7 @@ def main():
         # Get the number of clusters from the user
         n_clusters = simpledialog.askinteger("Input", "Enter the number of clusters:", minvalue=2)
         if n_clusters:
-            df = pd.read_csv('C:/Users/BossJore/PycharmProjects/Airline_Passenger_Satisfaction/data/Normalized_Data2.csv')
+            df = pd.read_csv('C:/Users/BossJore/PycharmProjects/Airline_Passenger_Satisfaction/data/Cleaned_Data.csv')
             perform_agglomerative_clustering(df, n_clusters)
         else:
             print("No valid input provided.")

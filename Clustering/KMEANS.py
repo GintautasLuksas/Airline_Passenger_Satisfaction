@@ -1,54 +1,46 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 
 
-def main():
-    df = pd.read_csv('C:/Users/BossJore/PycharmProjects/Airline_Passenger_Satisfaction/data/Normalized_Data2.csv')
+def process_clusters_manual(n_clusters, pca_components):
+    """Perform clustering with a specified number of clusters."""
+    plot_elbow_method(pca_components)
+    plot_clusters(pca_components, n_clusters)
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    kmeans_clusters = kmeans.fit_predict(pca_components)
+    score = silhouette_score(pca_components, kmeans_clusters)
+    messagebox.showinfo("K-Means Result", f"K-Means Silhouette Score (n_clusters={n_clusters}): {score:.3f}")
 
-    features = ['Gender', 'Customer Type', 'Age', 'Type of Travel', 'Class', 'Flight Distance',
-                'Inflight wifi service', 'Departure/Arrival time convenient', 'Ease of Online booking',
-                'Gate location', 'Food and drink', 'Online boarding', 'Seat comfort', 'Inflight entertainment',
-                'On-board service', 'Leg room service', 'Baggage handling', 'Checkin service',
-                'Inflight service', 'Cleanliness', 'Departure Delay in Minutes', 'Arrival Delay in Minutes',
-                'Satisfaction Score']
 
-    print(f"Columns in dataset: {df.columns.tolist()}")
-    if not all(col in df.columns for col in features):
-        raise ValueError("Some required columns are missing from the dataset!")
+def process_clusters_auto(pca_components):
+    """Automatically find the best number of clusters."""
+    best_score = -1
+    best_n_clusters = 0
 
-    scaler = StandardScaler()
-    df[features] = scaler.fit_transform(df[features])
-
-    pca = PCA(n_components=2)
-    pca_components = pca.fit_transform(df[features])
-
-    print("Explained Variance for each component:", pca.explained_variance_)
-    print("Explained Variance Ratio for each component:", pca.explained_variance_ratio_)
-    print("Cumulative Explained Variance Ratio:", pca.explained_variance_ratio_.cumsum())
-    print("PCA Components shape:", pca_components.shape)
-
-    option = input(
-        "Choose an option:\n1. Manually input number of clusters\n2. Automatically scan for best number of clusters (1-15)\n")
-
-    if option == '1':
-        n_clusters = int(input("Enter the number of clusters for K-Means: "))
-        plot_elbow_method(pca_components)
-        plot_clusters(pca_components, n_clusters)
+    for n_clusters in range(2, 16):
         kmeans = KMeans(n_clusters=n_clusters, random_state=42)
         kmeans_clusters = kmeans.fit_predict(pca_components)
         score = silhouette_score(pca_components, kmeans_clusters)
-        print(f"K-Means Silhouette Score (n_clusters={n_clusters}): {score:.3f}")
-    elif option == '2':
-        scan_best_clusters(pca_components)
-    else:
-        print("Invalid choice. Please select option 1 or 2.")
+        if score > best_score:
+            best_score = score
+            best_n_clusters = n_clusters
+
+    messagebox.showinfo(
+        "Best Clustering",
+        f"Best number of clusters: {best_n_clusters}\nSilhouette Score: {best_score:.3f}"
+    )
+    plot_clusters(pca_components, best_n_clusters)
+    kmeans = KMeans(n_clusters=best_n_clusters, random_state=42)
+    kmeans.fit(pca_components)
 
 
 def plot_elbow_method(pca_components):
+    """Plot the elbow method graph."""
     wcss = []
     for i in range(1, 16):
         kmeans = KMeans(n_clusters=i, random_state=42)
@@ -65,6 +57,7 @@ def plot_elbow_method(pca_components):
 
 
 def plot_clusters(pca_components, n_clusters):
+    """Plot clusters after applying K-Means."""
     kmeans = KMeans(n_clusters=n_clusters, random_state=42)
     kmeans_clusters = kmeans.fit_predict(pca_components)
 
@@ -77,21 +70,51 @@ def plot_clusters(pca_components, n_clusters):
     plt.show()
 
 
-def scan_best_clusters(pca_components):
-    best_score = -1
-    best_n_clusters = 0
-    print("\nSilhouette Scores for different cluster numbers:")
-    for n_clusters in range(2, 16):  # Starting from 2 clusters, as silhouette score needs at least 2 clusters
-        kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-        kmeans_clusters = kmeans.fit_predict(pca_components)
-        score = silhouette_score(pca_components, kmeans_clusters)
-        print(f"Silhouette Score (n_clusters={n_clusters}): {score:.3f}")
-        if score > best_score:
-            best_score = score
-            best_n_clusters = n_clusters
+def main():
+    # Load dataset
+    df = pd.read_csv('C:/Users/BossJore/PycharmProjects/Airline_Passenger_Satisfaction/data/Normalized_Data2.csv')
+    features = ['Gender', 'Customer Type', 'Age', 'Type of Travel', 'Class', 'Flight Distance',
+                'Inflight wifi service', 'Departure/Arrival time convenient', 'Ease of Online booking',
+                'Gate location', 'Food and drink', 'Online boarding', 'Seat comfort', 'Inflight entertainment',
+                'On-board service', 'Leg room service', 'Baggage handling', 'Checkin service',
+                'Inflight service', 'Cleanliness', 'Departure Delay in Minutes', 'Arrival Delay in Minutes',
+                'Satisfaction Score']
 
-    print(f"\nBest number of clusters based on silhouette score: {best_n_clusters} with score: {best_score:.3f}")
-    plot_clusters(pca_components, best_n_clusters)
+    if not all(col in df.columns for col in features):
+        messagebox.showerror("Error", "Some required columns are missing from the dataset!")
+        return
+
+    pca = PCA(n_components=2)
+    pca_components = pca.fit_transform(df[features])
+
+    # Create GUI
+    def handle_manual_cluster():
+        try:
+            n_clusters = int(manual_input.get())
+            process_clusters_manual(n_clusters, pca_components)
+        except ValueError:
+            messagebox.showerror("Error", "Please enter a valid number of clusters.")
+
+    def handle_auto_cluster():
+        process_clusters_auto(pca_components)
+
+    root = tk.Tk()
+    root.title("Clustering Options")
+
+    frame = ttk.Frame(root, padding="20")
+    frame.grid(row=0, column=0, sticky=(tk.W, tk.E))
+
+    ttk.Label(frame, text="Choose an option for clustering:", font=("Arial", 14)).grid(row=0, column=0, columnspan=2, pady=10)
+
+    manual_input = tk.StringVar()
+    ttk.Label(frame, text="Enter number of clusters (manual):").grid(row=1, column=0, sticky=tk.W, padx=10)
+    ttk.Entry(frame, textvariable=manual_input).grid(row=1, column=1, sticky=tk.W)
+
+    ttk.Button(frame, text="Run Manual Clustering", command=handle_manual_cluster).grid(row=2, column=0, pady=10, sticky=tk.W, padx=10)
+    ttk.Button(frame, text="Run Automatic Clustering", command=handle_auto_cluster).grid(row=3, column=0, pady=10, sticky=tk.W, padx=10)
+    ttk.Button(frame, text="Exit", command=root.quit).grid(row=4, column=0, pady=10, sticky=tk.W, padx=10)
+
+    root.mainloop()
 
 
 if __name__ == "__main__":
